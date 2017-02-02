@@ -31,7 +31,7 @@ func (d *Disk) toBytesArray() []byte {
 	size := int64(unsafe.Sizeof(*d)) - 8
 	buffer := make([]byte,size)
 
-	fmt.Printf("%v",d)
+	// fmt.Printf("%v",d)
 
 	binary.PutVarint(buffer[0:8], d.size)
 	binary.PutVarint(buffer[8:16], d.freeSpace)
@@ -41,13 +41,13 @@ func (d *Disk) toBytesArray() []byte {
 	binary.PutVarint(buffer[40:48], d.headBlock)
 	binary.PutVarint(buffer[48:56], d.tailBlock)
 
-	fmt.Printf("%v",toStructFS(buffer))
+	// fmt.Printf("%v",toStructFS(buffer))
 
 	return buffer
 }
 
-func toStructFS(bytes []byte) *Disk{
-	fs := new(Disk)
+func toStructFS(fs *Disk, bytes []byte){
+	// fs := new(Disk)
 	fs.size, _ = binary.Varint(bytes[0:8])
 	fs.freeSpace, _ = binary.Varint(bytes[8:16])
 	fs.sizeOfBlock, _ = binary.Varint(bytes[16:24])
@@ -56,11 +56,11 @@ func toStructFS(bytes []byte) *Disk{
 	fs.headBlock,_ = binary.Varint(bytes[40:48])
 	fs.tailBlock,_ = binary.Varint(bytes[48:56])
 
-	return fs
+	// return fs
 }
 
 func (d *Disk) writeFS() {
-	fmt.Println(d.toBytesArray())
+	// fmt.Println(d.toBytesArray())
 	buffer := make([]byte,d.sizeOfBlock)
 	copy(buffer,d.toBytesArray())
 
@@ -89,7 +89,7 @@ func initializeFreeBlocksList(disk *Disk) {
 func Format(disk *Disk) {
 	disk.freeSpace = disk.size
 	disk.freeBlocks = disk.blocks
-	initializeFreeBlocksList(newDisk)
+	initializeFreeBlocksList(disk)
 	_ = disk.AllocateBlock()
 	disk.writeFS()
 }
@@ -107,15 +107,66 @@ func (d *Disk) AllocateBlock() int64 {
 		d.freeSpace -= d.sizeOfBlock
 
 		fmt.Println("Allocate Block: ",allocatedBlock)
+
+		d.writeFS()
 	}
 	return allocatedBlock
 }
 
+func (d *Disk) UnallocateBlock(block int64) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println(r)
+		}
+	}()
+
+	if block >= d.blocks{
+		panic(fmt.Sprintf("block num is bigger than cant of blocks"))
+	}else if block == 0 {
+		panic(fmt.Sprintf("block 0 can not be unallocated"))
+	}else if d.blocks == (d.freeBlocks + 1) {
+		panic(fmt.Sprintf("there are no more free blocks to unallocate"))
+	}
+
+	buffer := make([]byte,d.sizeOfBlock)
+	nextBlock := make([]byte,8)
+	binary.PutVarint(nextBlock, block)
+	copy(buffer[d.sizeOfBlock-8:],nextBlock)
+
+	d.volumeManager.WriteBlock(d.tailBlock,buffer)
+	d.tailBlock = block
+
+	d.freeBlocks += 1
+	d.freeSpace += d.sizeOfBlock
+
+	fmt.Println("Unallocate Block: ",block)
+	d.writeFS()
+}
+
+func (d Disk) PrintInfo() {
+	fmt.Println("size: ",d.size)
+	fmt.Println("free space: ",d.freeSpace)
+	fmt.Println("size of block: ",d.sizeOfBlock)
+	fmt.Println("total blocks: ",d.blocks)
+	fmt.Println("free blocks: ",d.freeBlocks)
+}
+
 func CreateDisk(diskName string, size, sizeOfBlock int64){
+	defer func() {
+        if r := recover(); r != nil {
+            fmt.Println(r)
+        }
+    }()
+
 	newDisk := new(Disk)
 
 	newDisk.setSize(round(size))
 	newDisk.setSizeOfBlock(round(sizeOfBlock))
+
+	if newDisk.size <= newDisk.sizeOfBlock {
+		panic(fmt.Sprintf("%s", "size's Disk should be bigger than size of block"))
+	}
+
 	basicfs.CreateVolume(diskName,newDisk.size,newDisk.sizeOfBlock)
 	newDisk.volumeManager = basicfs.MountVolume(diskName,sizeOfBlock)
 
@@ -124,4 +175,21 @@ func CreateDisk(diskName string, size, sizeOfBlock int64){
 	newDisk.freeBlocks = newDisk.blocks
 
 	Format(newDisk)
+}
+
+func Mount(diskName string, sizeOfBlock int64) *Disk {
+	mountedDisk := new(Disk)
+	mountedDisk.volumeManager = basicfs.MountVolume(diskName,sizeOfBlock)
+
+	buffer := make([]byte, sizeOfBlock)
+	mountedDisk.volumeManager.ReadBlock(0,buffer)
+
+	toStructFS(mountedDisk, buffer[:int64(unsafe.Sizeof(*mountedDisk)) - 8])
+
+	return mountedDisk
+}
+
+func Unmount(d *Disk) {
+	d.volumeManager.UnMountVolume()
+	d = nil
 }
