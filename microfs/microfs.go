@@ -175,6 +175,7 @@ func CreateDisk(diskName string, size, sizeOfBlock int64){
 	newDisk.freeBlocks = newDisk.blocks
 
 	Format(newDisk)
+	Unmount(newDisk)
 }
 
 func Mount(diskName string, sizeOfBlock int64) *Disk {
