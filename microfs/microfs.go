@@ -180,7 +180,8 @@ func CreateDisk(diskName string, size, sizeOfBlock int64){
 func Mount(diskName string, sizeOfBlock int64) *Disk {
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Println("size of block should be passed: mount <diskName> <sizeOfBlock>")
+			fmt.Print(r)
+			fmt.Println(" or size of block should be passed: mount <diskName> <sizeOfBlock>")
 		}
 	}()
 	mountedDisk := new(Disk)

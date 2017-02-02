@@ -2,7 +2,7 @@ package basicfs
 
 import (
 	"os"
-	"log"
+	"fmt"
 )
 
 const rootpath = "disks/"
@@ -20,11 +20,12 @@ func (fsl *Volume) setSizeOfBlock(s int64) {
 	fsl.sizeOfBlock = s
 }
 
-func openfile(filepath string) *os.File {
-	file,err := os.OpenFile(rootpath + filepath, os.O_RDWR | os.O_CREATE, 0666)
+func openfile(filepath string, mode int) *os.File {
+	file,err := os.OpenFile(rootpath + filepath, mode, 0666)
 	if err != nil{
-		log.Println("no abrio archivo "+filepath)
-		return nil
+		panic(fmt.Sprintf("disk not found"))
+		// log.Println("no abrio archivo "+filepath)
+		// return nil
 	}
 	return file
 }
@@ -37,7 +38,7 @@ func (fsl *Volume) GetBlocksCant() int64 {
 // Public Funcs
 
 func CreateVolume(volumeName string, size, sizeOfBlock int64) {
-	disk := openfile(volumeName)
+	disk := openfile(volumeName, os.O_RDWR | os.O_CREATE)
 	defer disk.Close()
 
 	buffer := make([]byte,sizeOfBlock)
@@ -49,7 +50,7 @@ func CreateVolume(volumeName string, size, sizeOfBlock int64) {
 func MountVolume(volumeName string, sizeOfBlock int64) *Volume{
 	newMountedVolum := new(Volume)
 	newMountedVolum.setSizeOfBlock(sizeOfBlock)
-	newMountedVolum.setDisk(openfile(volumeName))
+	newMountedVolum.setDisk(openfile(volumeName,os.O_RDWR))
 
 	return newMountedVolum
 }
